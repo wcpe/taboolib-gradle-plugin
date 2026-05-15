@@ -1,7 +1,4 @@
-import org.gradle.api.tasks.compile.GroovyCompile
-import org.gradle.api.tasks.compile.JavaCompile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("groovy")
@@ -57,7 +54,28 @@ gradlePlugin {
 
 publishing {
     repositories {
-        maven("/Users/sky/Desktop/repo")
+        maven {
+            credentials {
+                username = project.findProperty("username").toString()
+                password = project.findProperty("password").toString()
+            }
+            authentication {
+                create<BasicAuthentication>("basic")
+            }
+            val releasesRepoUrl = uri("https://repo.wcpe.top/repository/maven-releases/")
+            val snapshotsRepoUrl = uri("https://repo.wcpe.top/repository/maven-snapshots/")
+            url = if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
+        }
+        mavenLocal()
+    }
+    publications {
+        create<MavenPublication>("gradle-plugins") {
+            groupId = "io.izzel.taboolib"
+            artifactId = "io.izzel.taboolib.gradle.plugin"
+            version = version
+            from(components["java"])
+            println("> Apply \"$groupId:$artifactId:$version\"")
+        }
     }
 }
 

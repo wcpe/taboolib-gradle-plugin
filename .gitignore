@@ -3,3 +3,5 @@
 .kotlin
 bin
 build
+.narrafork/
+.worktrees/
