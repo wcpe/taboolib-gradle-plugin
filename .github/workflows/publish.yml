@@ -125,6 +125,8 @@ jobs:
               t="other"
             fi
             [ -n "${title[${t}]:-}" ] || t="other"
+            # 转义 @ 为 \@，防止 commit 标题里的 @username 在 Release notes 中触发 mention
+            s="${s//@/\\@}"
             bucket[${t}]+="- ${s} (\`${h}\`)"$'\n'
           done < <(git log --no-merges --pretty=format:'%h%x09%s' "${log_args[@]}")
 
