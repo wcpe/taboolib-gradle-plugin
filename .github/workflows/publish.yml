@@ -1,12 +1,18 @@
 name: 发布到 maven.wcpe.top
 
 # 触发：推送到 main 分支自动正式发布（含 GitHub Release）；推送到 dev 分支仅测试 publish 是否成功
+# 仅含文档变更的提交不触发发布（避免无代码变更时浪费发布配额与产生无意义 Release）
 # 也支持在 Actions 页手动触发
 on:
   push:
     branches:
       - main
       - dev
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
   workflow_dispatch: {}
 
 # 同一分支的发布串行排队，避免并发互相覆盖

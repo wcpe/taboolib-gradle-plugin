@@ -72,9 +72,8 @@ publishing {
             authentication {
                 create<BasicAuthentication>("basic")
             }
-            val releasesRepoUrl = uri("https://maven.wcpe.top/repository/maven-releases/")
-            val snapshotsRepoUrl = uri("https://maven.wcpe.top/repository/maven-snapshots/")
-            url = if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
+            // 与 taboolib/reflex fork 一致，统一发布到 maven-tabooproject-release
+            url = uri("https://maven.wcpe.top/repository/maven-tabooproject-release/")
         }
         mavenLocal()
     }
