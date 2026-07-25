@@ -40,9 +40,9 @@ jobs:
       - name: 发布到 maven.wcpe.top
         env:
           # Gradle 会把 ORG_GRADLE_PROJECT_xxx 环境变量映射为工程属性 xxx，
-          # 对应 build.gradle.kts 里的 findProperty("tabooprojectUsername" / "tabooprojectPassword")
-          ORG_GRADLE_PROJECT_tabooprojectUsername: ${{ secrets.TABOOPROJECTUSERNAME }}
-          ORG_GRADLE_PROJECT_tabooprojectPassword: ${{ secrets.TABOOPROJECTPASSWORD }}
+          # 对应 build.gradle.kts 里的 findProperty("wcpeUsername" / "wcpePassword")
+          ORG_GRADLE_PROJECT_wcpeUsername: ${{ secrets.WCPE_USERNAME }}
+          ORG_GRADLE_PROJECT_wcpePassword: ${{ secrets.WCPE_PASSWORD }}
         run: ./gradlew publish --no-daemon --console=plain --stacktrace
 
   # Maven 发布成功后，再发布 GitHub Release：

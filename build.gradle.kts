@@ -65,9 +65,9 @@ publishing {
     repositories {
         maven {
             credentials {
-                // 属性名对齐 reflex fork：tabooprojectUsername / tabooprojectPassword
-                username = project.findProperty("tabooprojectUsername").toString()
-                password = project.findProperty("tabooprojectPassword").toString()
+                // 属性名对齐 taboolib fork：wcpeUsername / wcpePassword（发布到 io/izzel/taboolib/ 路径）
+                username = project.findProperty("wcpeUsername").toString()
+                password = project.findProperty("wcpePassword").toString()
             }
             authentication {
                 create<BasicAuthentication>("basic")
