@@ -1,5 +1,12 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+// 7 位短哈希：与 taboolib/reflex fork 命名一致，发布版本号为 <上游版本>-<短哈希>
+val gitShortHash: String = runCatching {
+    ProcessBuilder("git", "rev-parse", "--short=7", "HEAD")
+        .directory(rootDir).start()
+        .inputStream.bufferedReader().use { it.readText() }.trim()
+}.getOrNull()?.takeIf { it.isNotEmpty() } ?: "unknown"
+
 plugins {
     id("groovy")
     `maven-publish`
@@ -9,7 +16,9 @@ plugins {
 }
 
 group = "io.izzel.taboolib"
-version = "2.0.37-fix"
+// version 从 gradle.properties 读取上游版本号（2.0.37），拼接短哈希作为发布版本号
+// 直接设置 project.version，确保 java-gradle-plugin 自动生成的 plugin marker publication 也用拼接后的版本号
+version = "${project.version}-$gitShortHash"
 
 configurations {
     create("embed") {
@@ -56,15 +65,15 @@ publishing {
     repositories {
         maven {
             credentials {
-                username = project.findProperty("username").toString()
-                password = project.findProperty("password").toString()
+                // 属性名对齐 taboolib fork：wcpeUsername / wcpePassword（发布到 io/izzel/taboolib/ 路径）
+                username = project.findProperty("wcpeUsername").toString()
+                password = project.findProperty("wcpePassword").toString()
             }
             authentication {
                 create<BasicAuthentication>("basic")
             }
-            val releasesRepoUrl = uri("https://maven.wcpe.top/repository/maven-releases/")
-            val snapshotsRepoUrl = uri("https://maven.wcpe.top/repository/maven-snapshots/")
-            url = if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
+            // 与 taboolib/reflex fork 一致，统一发布到 maven-tabooproject-release
+            url = uri("https://maven.wcpe.top/repository/maven-tabooproject-release/")
         }
         mavenLocal()
     }
@@ -72,7 +81,7 @@ publishing {
         create<MavenPublication>("gradle-plugins") {
             groupId = "io.izzel.taboolib"
             artifactId = "io.izzel.taboolib.gradle.plugin"
-            version = version
+            // 版本号已在顶部拼接为 <上游版本>-<短哈希>，此处直接继承 project.version
             from(components["java"])
             println("> Apply \"$groupId:$artifactId:$version\"")
         }
