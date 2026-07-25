@@ -1,5 +1,12 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+// 7 位短哈希：与 taboolib/reflex fork 命名一致，发布版本号为 <上游版本>-<短哈希>
+val gitShortHash: String = runCatching {
+    ProcessBuilder("git", "rev-parse", "--short=7", "HEAD")
+        .directory(rootDir).start()
+        .inputStream.bufferedReader().use { it.readText() }.trim()
+}.getOrNull()?.takeIf { it.isNotEmpty() } ?: "unknown"
+
 plugins {
     id("groovy")
     `maven-publish`
@@ -9,7 +16,7 @@ plugins {
 }
 
 group = "io.izzel.taboolib"
-version = "2.0.37-fix"
+// version 从 gradle.properties 读取（上游版本号），发布时拼接短哈希
 
 configurations {
     create("embed") {
@@ -56,8 +63,9 @@ publishing {
     repositories {
         maven {
             credentials {
-                username = project.findProperty("username").toString()
-                password = project.findProperty("password").toString()
+                // 属性名对齐 reflex fork：tabooprojectUsername / tabooprojectPassword
+                username = project.findProperty("tabooprojectUsername").toString()
+                password = project.findProperty("tabooprojectPassword").toString()
             }
             authentication {
                 create<BasicAuthentication>("basic")
@@ -72,7 +80,8 @@ publishing {
         create<MavenPublication>("gradle-plugins") {
             groupId = "io.izzel.taboolib"
             artifactId = "io.izzel.taboolib.gradle.plugin"
-            version = version
+            // 发布版本号：<上游版本>-<7 位短哈希>，与 taboolib/reflex fork 命名一致
+            version = "${project.version}-$gitShortHash"
             from(components["java"])
             println("> Apply \"$groupId:$artifactId:$version\"")
         }
