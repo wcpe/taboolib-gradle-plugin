@@ -18,6 +18,9 @@ import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.commons.ClassRemapper
 
+import java.io.BufferedOutputStream
+import java.io.ByteArrayOutputStream
+import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -25,8 +28,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.jar.JarEntry
 import java.util.jar.JarFile
-import java.util.jar.JarOutputStream
-import java.util.zip.ZipException
+import java.util.zip.CRC32
+import java.util.zip.Deflater
 
 @ToString
 @DisableCachingByDefault(because = "Relocates and rewrites jar contents with runtime-dependent metadata.")
@@ -74,7 +77,7 @@ class TabooLibMainTask extends DefaultTask {
         def classCount = 0
         def resourceCount = 0
         try {
-            // 收集处理结果，保持顺序
+            // 收集处理结果（已预压缩），保持顺序
             def results = Collections.synchronizedList(new ArrayList<>())
             def readStart = System.currentTimeMillis()
             new JarFile(inJar).withCloseable { jarFile ->
@@ -86,10 +89,10 @@ class TabooLibMainTask extends DefaultTask {
                     if (tabooExt.exclude.stream().any { String e -> path.startsWith(e) }) {
                         return
                     }
+                    // 预读字节，避免线程间共享 JarFile InputStream
+                    def bytes = jarFile.getInputStream(jarEntry).withCloseable { it.bytes }
                     if (path.endsWith(".class")) {
                         classCount++
-                        // 预读 class 字节，避免线程间共享 JarFile InputStream
-                        def bytes = jarFile.getInputStream(jarEntry).withCloseable { it.bytes }
                         futures.add(pool.submit {
                             // 每个线程创建独立的 remapper 和 visitor
                             def threadRemapper = new RelocateRemapper(relocations, mapping as Map<String, String>)
@@ -99,58 +102,45 @@ class TabooLibMainTask extends DefaultTask {
                             def rem = new ClassRemapper(visitor, threadRemapper)
                             threadRemapper.remapper = rem
                             reader.accept(rem, 0)
+                            // 并行完成 ASM 重写 + 压缩，写入阶段无需再压缩
+                            // 用类名显式限定，避免闭包内被 Gradle 任务动态方法分发拦截
+                            def entry = TabooLibMainTask.toDeflatedEntry(threadRemapper.map(path), writer.toByteArray())
                             synchronized (results) {
-                                results.add([name: threadRemapper.map(path), data: writer.toByteArray()])
+                                results.add(entry)
                             }
                         })
                     } else {
                         resourceCount++
-                        // 非 class 文件直接读取
-                        def bytes = jarFile.getInputStream(jarEntry).withCloseable { it.bytes }
-                        results.add([name: remapper.map(path), data: bytes])
+                        // 非 class 文件也提交到线程池并行压缩
+                        futures.add(pool.submit {
+                            def entry = TabooLibMainTask.toDeflatedEntry(remapper.map(path), bytes)
+                            synchronized (results) {
+                                results.add(entry)
+                            }
+                        })
                     }
                 }
-                // 等待所有 class 处理完成
+                // 等待所有处理完成
                 futures.each { it.get() }
             }
             def asmTime = System.currentTimeMillis() - readStart
-            // 串行写入 jar
+            // 串行写入 jar（条目已预压缩，写入阶段为纯 IO）
             def writeStart = System.currentTimeMillis()
-            new JarOutputStream(new FileOutputStream(tempOut1)).withCloseable { out ->
-                def written = new HashSet<String>()
-                results.each { entry ->
-                    if (written.add(entry.name)) {
-                        try {
-                            out.putNextEntry(new JarEntry(entry.name as String))
-                            out.write(entry.data as byte[])
-                        } catch (ZipException ex) {
-                            println(ex)
-                        }
-                    }
-                }
-                // 描述文件
-                if (!tabooExt.version.skipVersionFile) {
-                    try {
-                        out.putNextEntry(new JarEntry("META-INF/taboolib/env.properties"))
-                        out.write(buildEnv())
-                        out.putNextEntry(new JarEntry("META-INF/taboolib/version.properties"))
-                        out.write(buildVersion())
-                    } catch (ZipException ignored) {
-                    }
-                }
-                // 插件文件
-                if (!tabooExt.version.skipPlatformFile) {
-                    Platforms.values().each {
-                        if (tabooExt.env.modules.contains(it.module)) {
-                            try {
-                                out.putNextEntry(new JarEntry(it.file))
-                                out.write(it.builder.build(tabooExt.des, project, tabooExt))
-                            } catch (ZipException ignored) {
-                            }
-                        }
+            // 描述文件
+            def extraEntries = new ArrayList<>()
+            if (!tabooExt.version.skipVersionFile) {
+                extraEntries.add(TabooLibMainTask.toDeflatedEntry("META-INF/taboolib/env.properties", buildEnv()))
+                extraEntries.add(TabooLibMainTask.toDeflatedEntry("META-INF/taboolib/version.properties", buildVersion()))
+            }
+            // 插件文件
+            if (!tabooExt.version.skipPlatformFile) {
+                Platforms.values().each {
+                    if (tabooExt.env.modules.contains(it.module)) {
+                        extraEntries.add(TabooLibMainTask.toDeflatedEntry(it.file, it.builder.build(tabooExt.des, project, tabooExt)))
                     }
                 }
             }
+            TabooLibMainTask.writeJar(tempOut1, results, extraEntries)
             def writeTime = System.currentTimeMillis() - writeStart
             def totalTime = System.currentTimeMillis() - totalStart
             println("[taboolibMainTask] ${classCount} classes, ${resourceCount} resources | ASM: ${asmTime}ms (${nThreads} threads), Write: ${writeTime}ms, Total: ${totalTime}ms")
@@ -158,6 +148,125 @@ class TabooLibMainTask extends DefaultTask {
             pool.shutdown()
         }
         Files.copy(tempOut1.toPath(), outJar.toPath(), StandardCopyOption.REPLACE_EXISTING)
+    }
+
+    /**
+     * 将原始字节压缩为 zip DEFLATED 条目，并计算 CRC 与大小。
+     * 压缩在并行线程池中完成，写入阶段只需顺序写出已压缩数据。
+     */
+    private static Map<String, Object> toDeflatedEntry(String name, byte[] data) {
+        def deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true)
+        try {
+            deflater.setInput(data)
+            deflater.finish()
+            def baos = new ByteArrayOutputStream(Math.max(64, data.length >> 2))
+            def buf = new byte[8192]
+            while (!deflater.finished()) {
+                int n = deflater.deflate(buf)
+                if (n > 0) {
+                    baos.write(buf, 0, n)
+                }
+            }
+            def crc = new CRC32()
+            crc.update(data)
+            return [
+                    name : name,
+                    data : baos.toByteArray(),
+                    crc  : crc.getValue(),
+                    csize: (long) baos.size(),
+                    usize: (long) data.length,
+            ]
+        } finally {
+            deflater.end()
+        }
+    }
+
+    /**
+     * 手写 zip 容器，直接写入已预压缩的 DEFLATED 数据。
+     * 相比 JarOutputStream：避免写入阶段串行压缩，并使用缓冲流减少 syscall。
+     * 输出为标准 zip（DEFLATED 条目，已知大小，无数据描述符），行为与原实现兼容。
+     */
+    private static void writeJar(File file, List<Map<String, Object>> results, List<Map<String, Object>> extras) {
+        // 去重，保留首次出现的条目（与原实现行为一致）
+        def written = new HashSet<String>()
+        def entries = new ArrayList<Map<String, Object>>()
+        (results + extras).each { e ->
+            if (written.add(e.name as String)) {
+                entries.add(e)
+            }
+        }
+        // 固定 DOS 时间戳 1980-01-01 00:00:00
+        final int dosTime = 0x00210000
+        final int gpf = 0x0800 // 文件名使用 UTF-8 编码
+        new BufferedOutputStream(new FileOutputStream(file), 1 << 17).withCloseable { out ->
+            // 中央目录缓冲
+            def central = new ByteArrayOutputStream(1 << 16)
+            long pos = 0
+            entries.each { e ->
+                byte[] nameBytes = (e.name as String).getBytes(StandardCharsets.UTF_8)
+                byte[] data = e.data as byte[]
+                long crc = e.crc as long
+                long csize = e.csize as long
+                long usize = e.usize as long
+                long localHeaderOffset = pos
+                // 本地文件头
+                writeInt(out, 0x04034b50)
+                writeShort(out, 20)
+                writeShort(out, gpf)
+                writeShort(out, 8) // DEFLATED
+                writeInt(out, dosTime)
+                writeInt(out, crc)
+                writeInt(out, csize)
+                writeInt(out, usize)
+                writeShort(out, nameBytes.length)
+                writeShort(out, 0) // extra
+                out.write(nameBytes)
+                out.write(data)
+                pos = localHeaderOffset + 30 + nameBytes.length + csize
+                // 中央目录记录
+                writeInt(central, 0x02014b50)
+                writeShort(central, 20)
+                writeShort(central, 20)
+                writeShort(central, gpf)
+                writeShort(central, 8)
+                writeInt(central, dosTime)
+                writeInt(central, crc)
+                writeInt(central, csize)
+                writeInt(central, usize)
+                writeShort(central, nameBytes.length)
+                writeShort(central, 0) // extra
+                writeShort(central, 0) // comment
+                writeShort(central, 0) // disk number start
+                writeShort(central, 0) // internal attrs
+                writeInt(central, 0)   // external attrs
+                writeInt(central, localHeaderOffset)
+                central.write(nameBytes)
+            }
+            long cdOffset = pos
+            byte[] cdBytes = central.toByteArray()
+            out.write(cdBytes)
+            // 结束中央目录记录
+            writeInt(out, 0x06054b50)
+            writeShort(out, 0)
+            writeShort(out, 0)
+            writeShort(out, entries.size())
+            writeShort(out, entries.size())
+            writeInt(out, cdBytes.length)
+            writeInt(out, cdOffset)
+            writeShort(out, 0) // comment
+        }
+    }
+
+    private static void writeShort(OutputStream out, int v) {
+        out.write(v & 0xff)
+        out.write((v >>> 8) & 0xff)
+    }
+
+    private static void writeInt(OutputStream out, long v) {
+        out.write((int) (v & 0xff))
+        out.write((int) ((v >>> 8) & 0xff))
+        out.write((int) ((v >>> 16) & 0xff))
+        out.write((int) ((v >>> 24) & 0xff))
     }
 
     byte[] buildEnv() {
