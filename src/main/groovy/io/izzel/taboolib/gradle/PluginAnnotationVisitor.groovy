@@ -1,25 +1,28 @@
 package io.izzel.taboolib.gradle
 
-import org.gradle.api.Project
 import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.Opcodes
 
 class PluginAnnotationVisitor extends AnnotationVisitor {
 
-    Project project
+    // 配置缓存兼容：不再持有 Project，仅保留所需的标量值
+    String projectName
 
-    PluginAnnotationVisitor(AnnotationVisitor annotationVisitor, project) {
+    String projectVersion
+
+    PluginAnnotationVisitor(AnnotationVisitor annotationVisitor, String projectName, String projectVersion) {
         super(Opcodes.ASM9, annotationVisitor)
-        this.project = project
+        this.projectName = projectName
+        this.projectVersion = projectVersion
     }
 
     @Override
     void visit(String name, Object value) {
         if (value instanceof String) {
             super.visit(name, value
-                    .replace("@plugin_id@", project.name.toLowerCase())
-                    .replace("@plugin_name@", project.name)
-                    .replace("@plugin_version@", project.version.toString())
+                    .replace("@plugin_id@", projectName.toLowerCase())
+                    .replace("@plugin_name@", projectName)
+                    .replace("@plugin_version@", projectVersion)
             )
         } else {
             super.visit(name, value)

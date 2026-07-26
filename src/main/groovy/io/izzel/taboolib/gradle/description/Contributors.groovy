@@ -1,6 +1,6 @@
 package io.izzel.taboolib.gradle.description
 
-class Contributors {
+class Contributors implements Serializable {
 
     List<Contributor> contributors = []
 
@@ -10,7 +10,7 @@ class Contributors {
         return con
     }
 
-    class Contributor {
+    class Contributor implements Serializable {
 
         def name
         def description

@@ -108,12 +108,39 @@ class TabooLibPlugin implements Plugin<Project> {
 
             def kotlinVersion = KotlinPluginWrapperKt.getKotlinPluginVersion(project).replaceAll("[._-]", "")
             tabooTask.configure { TabooLibMainTask task ->
-                task.tabooExt = tabooExt
-                task.project = project
                 task.inJar = task.inJar ?: jarTaskProvider.get().archiveFile.get().asFile
                 task.relocations = tabooExt.relocation
                 task.classifier = tabooExt.classifier
                 task.api = api
+
+                // 配置缓存兼容：在配置期提取所有需要的值为任务属性
+                task.subproject = tabooExt.subproject
+                task.exclude = tabooExt.exclude
+                task.skipVersionFile = tabooExt.version.skipVersionFile
+                task.skipPlatformFile = tabooExt.version.skipPlatformFile
+                task.modules = tabooExt.env.modules
+                task.pluginDescription = tabooExt.des
+                task.envDebug = tabooExt.env.debug
+                task.forceDownloadInDev = tabooExt.env.forceDownloadInDev
+                task.envRepoCentral = tabooExt.env.repoCentral
+                task.envRepoTabooLib = tabooExt.env.repoTabooLib
+                task.envFileLibs = tabooExt.env.fileLibs
+                task.envFileAssets = tabooExt.env.fileAssets
+                task.enableLegacyDependencyResolver = tabooExt.env.enableLegacyDependencyResolver
+                task.enableIsolatedClassloader = tabooExt.env.enableIsolatedClassloader
+                task.disableOnSkippedVersion = tabooExt.env.disableOnSkippedVersion
+                task.disableOnUnsupportedVersion = tabooExt.env.disableOnUnsupportedVersion
+                task.disableWhenPrimitiveLoaderError = tabooExt.env.disableWhenPrimitiveLoaderError
+                task.skipKotlin = tabooExt.version.skipKotlin
+                task.coroutinesVersion = tabooExt.version.coroutines
+                task.taboolibVersion = tabooExt.version.taboolib
+                task.skipKotlinRelocate = tabooExt.version.skipKotlinRelocate
+                task.skipTabooLibRelocate = tabooExt.version.skipTabooLibRelocate
+                task.kotlinVersion = KotlinPluginWrapperKt.getKotlinPluginVersion(project)
+                task.deleteCode = project.hasProperty("DeleteCode")
+                task.projectName = project.name
+                task.projectGroup = project.group.toString()
+                task.projectVersion = project.version.toString()
 
                 // 重定向
                 if (!tabooExt.version.isSkipTabooLibRelocate()) {

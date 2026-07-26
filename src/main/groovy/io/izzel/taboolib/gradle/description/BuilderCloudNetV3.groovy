@@ -2,8 +2,6 @@ package io.izzel.taboolib.gradle.description
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
-import io.izzel.taboolib.gradle.TabooLibExtension
-import org.gradle.api.Project
 
 /**
  * @project taboolib-gradle-plugin
@@ -13,18 +11,18 @@ import org.gradle.api.Project
  */
 class BuilderCloudNetV3 extends Builder {
     @Override
-    byte[] build(Description description, Project project, TabooLibExtension tabooLibExt) {
+    byte[] build(Description description, String projectName, String projectGroup, String projectVersion, boolean skipTabooLibRelocate) {
         def info = new JsonObject()
-        info.addProperty('group', project.group.toString())
-        info.addProperty('name', description.name ?: project.name)
+        info.addProperty('group', projectGroup)
+        info.addProperty('name', description.name ?: projectName)
 
-        if (tabooLibExt.version.skipTabooLibRelocate) {
+        if (skipTabooLibRelocate) {
             info.addProperty('main', "taboolib.platform.CloudNetV3Plugin")
         } else {
-            info.addProperty('main', "${project.group}.taboolib.platform.CloudNetV3Plugin")
+            info.addProperty('main', "${projectGroup}.taboolib.platform.CloudNetV3Plugin")
         }
 
-        info.addProperty('version', project.version.toString())
+        info.addProperty('version', projectVersion)
         // authors
         def con = description.con.contributors.collect { it.name }
         if (con.size() >= 1) {
