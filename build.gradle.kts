@@ -76,18 +76,10 @@ publishing {
         }
         mavenLocal()
     }
-    publications {
-        create<MavenPublication>("gradle-plugins") {
-            groupId = "io.izzel.taboolib"
-            // artifactId 用项目名，避免与 java-gradle-plugin 自动生成的 plugin marker publication
-            // （artifactId = <plugin id>.gradle.plugin = io.izzel.taboolib.gradle.plugin）坐标重叠，
-            // 导致两者发布到同一路径时 release 仓库拒绝覆盖。
-            artifactId = "taboolib-gradle-plugin"
-            // 版本号已在顶部拼接为 <上游版本>-<短哈希>，此处直接继承 project.version
-            from(components["java"])
-            println("> Apply \"$groupId:$artifactId:$version\"")
-        }
-    }
+    // 不手动创建 publication：com.gradle.plugin-publish 已自动生成 pluginMaven publication
+    // （artifactId = 项目名 taboolib-gradle-plugin）和 taboolibPluginMarkerMaven publication
+    // （artifactId = io.izzel.taboolib.gradle.plugin）。手动创建会与 pluginMaven 坐标重叠，
+    // 导致两者发布到同一路径时 release 仓库拒绝覆盖。
 }
 
 java {
