@@ -1,23 +1,20 @@
 package io.izzel.taboolib.gradle.description
 
-import io.izzel.taboolib.gradle.TabooLibExtension
-import org.gradle.api.Project
-
 class BuilderBukkit extends Builder {
 
     @SuppressWarnings('GroovyAssignabilityCheck')
     @Override
-    byte[] build(Description description, Project project, TabooLibExtension tabooLibExt) {
+    byte[] build(Description description, String projectName, String projectGroup, String projectVersion, boolean skipTabooLibRelocate) {
         def body = startBukkitFile()
-        body += "name: ${description.name ?: project.name}"
+        body += "name: ${description.name ?: projectName}"
 
-        if (tabooLibExt.version.skipTabooLibRelocate) {
+        if (skipTabooLibRelocate) {
             body += "main: taboolib.platform.BukkitPlugin"
         } else {
-            body += "main: ${project.group}.taboolib.platform.BukkitPlugin"
+            body += "main: ${projectGroup}.taboolib.platform.BukkitPlugin"
         }
 
-        body += "version: ${project.version}"
+        body += "version: ${projectVersion}"
         write(body, description.lin.links['homepage'], 'website')
 
         // authors

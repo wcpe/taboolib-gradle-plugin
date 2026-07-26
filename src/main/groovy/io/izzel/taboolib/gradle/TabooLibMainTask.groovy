@@ -2,18 +2,18 @@ package io.izzel.taboolib.gradle
 
 import groovy.transform.ToString
 import io.izzel.taboolib.gradle.description.Builder
+import io.izzel.taboolib.gradle.description.Description
 import io.izzel.taboolib.gradle.description.Platforms
 import org.gradle.api.DefaultTask
-import org.gradle.api.Project
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.Nested
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
-import org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapperKt
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassWriter
 import org.objectweb.asm.commons.ClassRemapper
@@ -49,15 +49,98 @@ class TabooLibMainTask extends DefaultTask {
     @Input
     boolean api;
 
-    @Internal
-    Project project
+    // 配置缓存兼容：所有原从 TabooLibExtension / Project 读取的值
+    // 均在配置期提取为 @Input / @Nested / @Internal 字段，
+    // @TaskAction 中不再访问 project.extensions 或 project.hasProperty。
+
+    @Input
+    boolean subproject
+
+    @Input
+    List<String> exclude
+
+    @Input
+    boolean skipVersionFile
+
+    @Input
+    boolean skipPlatformFile
+
+    @Input
+    Set<String> modules
 
     @Internal
-    TabooLibExtension tabooExt
+    Description pluginDescription
+
+    @Input
+    boolean envDebug
+
+    @Input
+    boolean forceDownloadInDev
+
+    @Input
+    String envRepoCentral
+
+    @Input
+    String envRepoTabooLib
+
+    @Input
+    String envFileLibs
+
+    @Input
+    String envFileAssets
+
+    @Input
+    boolean enableLegacyDependencyResolver
+
+    @Input
+    boolean enableIsolatedClassloader
+
+    @Input
+    boolean disableOnSkippedVersion
+
+    @Input
+    boolean disableOnUnsupportedVersion
+
+    @Input
+    boolean disableWhenPrimitiveLoaderError
+
+    @Input
+    boolean skipKotlin
+
+    @Optional
+    @Input
+    String coroutinesVersion
+
+    @Optional
+    @Input
+    String taboolibVersion
+
+    @Input
+    boolean skipKotlinRelocate
+
+    @Input
+    boolean skipTabooLibRelocate
+
+    @Input
+    String kotlinVersion
+
+    @Internal
+    boolean deleteCode
+
+    // 配置缓存兼容：project.name/group/version 在配置期提取为 @Input 字段
+    // 不在执行期访问 Task.project
+    @Input
+    String projectName
+
+    @Input
+    String projectGroup
+
+    @Input
+    String projectVersion
 
     @TaskAction
     def relocate() {
-        if (tabooExt.subproject) {
+        if (subproject) {
             return
         }
         def totalStart = System.currentTimeMillis()
@@ -86,7 +169,7 @@ class TabooLibMainTask extends DefaultTask {
                 entries.each { JarEntry jarEntry ->
                     def path = jarEntry.name
                     // 忽略用户定义的文件
-                    if (tabooExt.exclude.stream().any { String e -> path.startsWith(e) }) {
+                    if (exclude.stream().any { String e -> path.startsWith(e) }) {
                         return
                     }
                     // 预读字节，避免线程间共享 JarFile InputStream
@@ -98,7 +181,7 @@ class TabooLibMainTask extends DefaultTask {
                             def threadRemapper = new RelocateRemapper(relocations, mapping as Map<String, String>)
                             def reader = new ClassReader(bytes)
                             def writer = new ClassWriter(0)
-                            def visitor = new TabooLibClassVisitor(writer, project, tabooExt, api)
+                            def visitor = new TabooLibClassVisitor(writer, deleteCode, skipTabooLibRelocate, relocations, projectName, projectVersion, projectGroup, api)
                             def rem = new ClassRemapper(visitor, threadRemapper)
                             threadRemapper.remapper = rem
                             reader.accept(rem, 0)
@@ -128,15 +211,15 @@ class TabooLibMainTask extends DefaultTask {
             def writeStart = System.currentTimeMillis()
             // 描述文件
             def extraEntries = new ArrayList<>()
-            if (!tabooExt.version.skipVersionFile) {
+            if (!skipVersionFile) {
                 extraEntries.add(TabooLibMainTask.toDeflatedEntry("META-INF/taboolib/env.properties", buildEnv()))
                 extraEntries.add(TabooLibMainTask.toDeflatedEntry("META-INF/taboolib/version.properties", buildVersion()))
             }
             // 插件文件
-            if (!tabooExt.version.skipPlatformFile) {
+            if (!skipPlatformFile) {
                 Platforms.values().each {
-                    if (tabooExt.env.modules.contains(it.module)) {
-                        extraEntries.add(TabooLibMainTask.toDeflatedEntry(it.file, it.builder.build(tabooExt.des, project, tabooExt)))
+                    if (modules.contains(it.module)) {
+                        extraEntries.add(TabooLibMainTask.toDeflatedEntry(it.file, it.builder.build(pluginDescription, projectName, projectGroup, projectVersion, skipTabooLibRelocate)))
                     }
                 }
             }
@@ -270,41 +353,40 @@ class TabooLibMainTask extends DefaultTask {
     }
 
     byte[] buildEnv() {
-        def modules = new HashSet<String>(tabooExt.env.modules)
+        def modulesSet = new HashSet<String>(modules)
         // 平台实现
         Platforms.values().each { p ->
-            if (p.module in modules && p.hasImpl) {
-                modules += p.module + "-impl"
+            if (p.module in modulesSet && p.hasImpl) {
+                modulesSet += p.module + "-impl"
             }
         }
-        modules.removeIf { i -> i.startsWith("common") }
+        modulesSet.removeIf { i -> i.startsWith("common") }
         def file = Builder.startBukkitFile()
         file.addAll([
-                "debug=" + tabooExt.env.debug,
-                "force-download-in-dev=" + tabooExt.env.forceDownloadInDev,
-                "repo-central=" + tabooExt.env.repoCentral,
-                "repo-taboolib=" + tabooExt.env.repoTabooLib,
-                "file-libs=" + tabooExt.env.fileLibs,
-                "file-assets=" + tabooExt.env.fileAssets,
-                "enable-legacy-dependency-resolver=" + tabooExt.env.enableLegacyDependencyResolver,
-                "enable-isolated-classloader=" + tabooExt.env.enableIsolatedClassloader,
-                "disable-on-skipped-version=" + tabooExt.env.disableOnSkippedVersion,
-                "disable-on-unsupported-version=" + tabooExt.env.disableOnUnsupportedVersion,
-                "disable-when-primitive-loader-error=" + tabooExt.env.disableWhenPrimitiveLoaderError,
-                "module=" + modules.join(',')
+                "debug=" + envDebug,
+                "force-download-in-dev=" + forceDownloadInDev,
+                "repo-central=" + envRepoCentral,
+                "repo-taboolib=" + envRepoTabooLib,
+                "file-libs=" + envFileLibs,
+                "file-assets=" + envFileAssets,
+                "enable-legacy-dependency-resolver=" + enableLegacyDependencyResolver,
+                "enable-isolated-classloader=" + enableIsolatedClassloader,
+                "disable-on-skipped-version=" + disableOnSkippedVersion,
+                "disable-on-unsupported-version=" + disableOnUnsupportedVersion,
+                "disable-when-primitive-loader-error=" + disableWhenPrimitiveLoaderError,
+                "module=" + modulesSet.join(',')
         ])
         return file.join('\n').getBytes(StandardCharsets.UTF_8)
     }
 
     byte[] buildVersion() {
-        def kotlinVersion = KotlinPluginWrapperKt.getKotlinPluginVersion(project)
         def file = Builder.startBukkitFile()
         file.addAll([
-                "kotlin=" + (tabooExt.version.skipKotlin ? "null" : kotlinVersion),
-                "kotlin-coroutines=" + tabooExt.version.coroutines,
-                "taboolib=" + tabooExt.version.taboolib,
-                "skip-kotlin-relocate=" + tabooExt.version.skipKotlinRelocate,
-                "skip-taboolib-relocate=" + tabooExt.version.skipTabooLibRelocate
+                "kotlin=" + (skipKotlin ? "null" : kotlinVersion),
+                "kotlin-coroutines=" + coroutinesVersion,
+                "taboolib=" + taboolibVersion,
+                "skip-kotlin-relocate=" + skipKotlinRelocate,
+                "skip-taboolib-relocate=" + skipTabooLibRelocate
         ])
         return file.join('\n').getBytes(StandardCharsets.UTF_8)
     }

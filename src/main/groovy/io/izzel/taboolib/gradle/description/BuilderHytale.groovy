@@ -2,24 +2,22 @@ package io.izzel.taboolib.gradle.description
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
-import io.izzel.taboolib.gradle.TabooLibExtension
-import org.gradle.api.Project
 
 class BuilderHytale extends Builder {
 
     @Override
-    byte[] build(Description description, Project project, TabooLibExtension tabooLibExt) {
+    byte[] build(Description description, String projectName, String projectGroup, String projectVersion, boolean skipTabooLibRelocate) {
         def manifest = new JsonObject()
 
         // Group - 使用项目的 group
-        def group = description.hytaleNodes['Group'] ?: project.group.toString()
+        def group = description.hytaleNodes['Group'] ?: projectGroup
         manifest.addProperty('Group', group)
 
         // Name - 插件名称
-        manifest.addProperty('Name', description.name ?: project.name)
+        manifest.addProperty('Name', description.name ?: projectName)
 
         // Version - 版本号
-        manifest.addProperty('Version', project.version.toString())
+        manifest.addProperty('Version', projectVersion)
 
         // Description - 插件描述
         def desc = description.hytaleNodes['Description']
@@ -48,10 +46,10 @@ class BuilderHytale extends Builder {
         }
 
         // Main - 主类
-        if (tabooLibExt.version.skipTabooLibRelocate) {
+        if (skipTabooLibRelocate) {
             manifest.addProperty('Main', "taboolib.platform.HytalePlugin")
         } else {
-            manifest.addProperty('Main', "${project.group}.taboolib.platform.HytalePlugin")
+            manifest.addProperty('Main', "${projectGroup}.taboolib.platform.HytalePlugin")
         }
 
         // ServerVersion - 服务器版本要求

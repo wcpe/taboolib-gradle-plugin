@@ -1,6 +1,6 @@
 package io.izzel.taboolib.gradle.description
 
-class Links {
+class Links implements Serializable {
 
     def links = new HashMap<String, Link>()
 
@@ -10,7 +10,7 @@ class Links {
         return link
     }
 
-    class Link {
+    class Link implements Serializable {
 
         String name
         String url

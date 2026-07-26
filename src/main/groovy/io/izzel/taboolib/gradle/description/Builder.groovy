@@ -4,14 +4,13 @@ import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
-import io.izzel.taboolib.gradle.TabooLibExtension
-import org.gradle.api.Project
 
 import java.nio.charset.StandardCharsets
 
 abstract class Builder {
 
-    abstract byte[] build(Description description, Project project, TabooLibExtension tabooLibExt)
+    // 配置缓存兼容：不再传入 Project，仅传入所需的标量值
+    abstract byte[] build(Description description, String projectName, String projectGroup, String projectVersion, boolean skipTabooLibRelocate)
 
     static List<String> startBukkitFile() {
         def str = []
