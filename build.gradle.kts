@@ -64,8 +64,8 @@ publishing {
             authentication {
                 create<BasicAuthentication>("basic")
             }
-            val releasesRepoUrl = uri("https://repo.wcpe.top/repository/maven-releases/")
-            val snapshotsRepoUrl = uri("https://repo.wcpe.top/repository/maven-snapshots/")
+            val releasesRepoUrl = uri("https://maven.wcpe.top/repository/maven-releases/")
+            val snapshotsRepoUrl = uri("https://maven.wcpe.top/repository/maven-snapshots/")
             url = if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
         }
         mavenLocal()

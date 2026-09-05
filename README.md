@@ -4,7 +4,7 @@
 
 ## 构件仓库
 
-本 fork 的构件发布于自有 Maven 仓库 `repo.wcpe.top`，坐标组为 `io.izzel.taboolib`，版本号遵循 `2.0.38-wcpe.N`（上游版本 + wcpe 修订号，最新版本见 [Releases](https://github.com/wcpe/taboolib-gradle-plugin/releases/latest)）。
+本 fork 的构件发布于自有 Maven 仓库 `maven.wcpe.top`，坐标组为 `io.izzel.taboolib`，版本号遵循 `2.0.38-wcpe.N`（上游版本 + wcpe 修订号，最新版本见 [Releases](https://github.com/wcpe/taboolib-gradle-plugin/releases/latest)）。
 
 ## 引用方式
 
@@ -13,7 +13,7 @@
 ```kotlin
 pluginManagement {
     repositories {
-        maven("https://repo.wcpe.top/repository/maven-releases/")
+        maven("https://maven.wcpe.top/repository/maven-releases/")
         gradlePluginPortal()
     }
 }
