@@ -1,12 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-// 7 位短哈希：与 taboolib/reflex fork 命名一致，发布版本号为 <上游版本>-<短哈希>
-val gitShortHash: String = runCatching {
-    ProcessBuilder("git", "rev-parse", "--short=7", "HEAD")
-        .directory(rootDir).start()
-        .inputStream.bufferedReader().use { it.readText() }.trim()
-}.getOrNull()?.takeIf { it.isNotEmpty() } ?: "unknown"
-
 plugins {
     id("groovy")
     `maven-publish`
@@ -16,7 +9,8 @@ plugins {
 }
 
 group = "io.izzel.taboolib"
-version = "2.0.38"
+// 发布版本号直接读取 gradle.properties 的 version（Debian 式：上游版本 + wcpe 修订号，如 2.0.38-wcpe.1），
+// 与 tag 驱动的发布流程保持一致：打与 version 同名的 tag 即触发发布
 
 configurations {
     create("embed") {
