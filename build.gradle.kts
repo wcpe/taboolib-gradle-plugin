@@ -18,6 +18,9 @@ configurations {
     }
 }
 
+val kotlinPluginTestRuntime by configurations.creating
+val functionalTestSourceSet = sourceSets.create("functionalTest")
+
 repositories {
     mavenLocal()
     mavenCentral()
@@ -31,6 +34,28 @@ dependencies {
     "embed"("org.ow2.asm:asm-commons:9.9")
     "embed"("com.google.code.gson:gson:2.9.0")
     "embed"(kotlin("stdlib"))
+    add(functionalTestSourceSet.implementationConfigurationName, gradleTestKit())
+    kotlinPluginTestRuntime("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24")
+}
+
+tasks.pluginUnderTestMetadata {
+    pluginClasspath.from(kotlinPluginTestRuntime)
+}
+
+// 使用 Gradle 自带 TestKit 执行真实消费工程，避免为了构建回归额外引入测试框架。
+val functionalTest by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "验证 TabooLib 下游配置缓存、任务缓存和产物稳定性"
+    dependsOn(functionalTestSourceSet.classesTaskName, tasks.pluginUnderTestMetadata)
+    classpath = functionalTestSourceSet.runtimeClasspath
+    mainClass.set("io.izzel.taboolib.gradle.TabooLibCacheFunctionalTest")
+    args(layout.projectDirectory.dir(".tmp/cache-functional-test").asFile.absolutePath)
+    maxHeapSize = "512m"
+    jvmArgs("-Dfile.encoding=UTF-8")
+}
+
+tasks.check {
+    dependsOn(functionalTest)
 }
 
 tasks.jar {
@@ -39,6 +64,7 @@ tasks.jar {
 }
 
 gradlePlugin {
+    testSourceSets(functionalTestSourceSet)
     website.set("https://github.com/TabooLib/taboolib-gradle-plugin")
     vcsUrl.set("https://github.com/TabooLib/taboolib-gradle-plugin")
 
