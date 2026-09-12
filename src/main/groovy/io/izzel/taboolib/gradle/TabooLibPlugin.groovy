@@ -91,9 +91,12 @@ class TabooLibPlugin implements Plugin<Project> {
                 // 配置阶段触发任何 cross-project resolve。
                 task.from(project.provider {
                     taboo.collect { // 在这里打包 "taboo" 依赖
-                        if (it.isDirectory()) {
-                            it
-                        } else if (it.name.endsWith(".jar")) {
+                        // 不要用 File.isDirectory() 判断：那是一次文件系统探测，会让每个依赖产物的
+                        // 路径（各子项目 build/libs/*.jar）登记为 Gradle 配置缓存输入 —— 任一模块
+                        // 重新构建都会令配置缓存条目失效，导致每次构建都重新配置整个工程。
+                        // 改按扩展名判断：jar 展开内容，其余（目录 / 其它文件）原样收集。
+                        // it.name 是纯字符串、zipTree/files 都是惰性文件树，均不触发 stat。
+                        if (it.name.endsWith(".jar")) {
                             project.zipTree(it)
                         } else {
                             project.files(it)
