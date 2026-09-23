@@ -1,22 +1,19 @@
 package io.izzel.taboolib.gradle.description
 
-import io.izzel.taboolib.gradle.TabooLibExtension
-import org.gradle.api.Project
-
 class BuilderAfyBroker extends Builder {
 
     @Override
-    byte[] build(Description description, Project project, TabooLibExtension tabooLibExt) {
+    byte[] build(Description description, String projectName, String projectGroup, String projectVersion, boolean skipTabooLibRelocate) {
         def body = startBukkitFile()
-        body += "name: ${description.name ?: project.name}"
+        body += "name: ${description.name ?: projectName}"
 
-        if (tabooLibExt.version.skipTabooLibRelocate) {
+        if (skipTabooLibRelocate) {
             body += "main: taboolib.platform.AfyBrokerPlugin"
         } else {
-            body += "main: ${project.group}.taboolib.platform.AfyBrokerPlugin"
+            body += "main: ${projectGroup}.taboolib.platform.AfyBrokerPlugin"
         }
 
-        body += "version: ${project.version}"
+        body += "version: ${projectVersion}"
         writeLine(body)
         // authors
         def con = description.con.contributors.collect { it.name }.join(', ')

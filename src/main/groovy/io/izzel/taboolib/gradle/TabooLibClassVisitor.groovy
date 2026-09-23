@@ -1,6 +1,5 @@
 package io.izzel.taboolib.gradle
 
-import org.gradle.api.Project
 import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.MethodVisitor
@@ -10,9 +9,18 @@ class TabooLibClassVisitor extends ClassVisitor {
 
     String name
 
-    Project project
+    // 配置缓存兼容：不再持有 Project / TabooLibExtension，仅保留所需的标量值
+    boolean deleteCode
 
-    TabooLibExtension tabooExt
+    boolean skipTabooLibRelocate
+
+    Map<String, String> relocations
+
+    String projectName
+
+    String projectVersion
+
+    String projectGroup
 
     boolean api
 
@@ -22,10 +30,14 @@ class TabooLibClassVisitor extends ClassVisitor {
             "Lcom/velocitypowered/api/plugin/Plugin;"
     ]
 
-    TabooLibClassVisitor(ClassVisitor classVisitor, Project project, TabooLibExtension tabooExt, boolean api) {
+    TabooLibClassVisitor(ClassVisitor classVisitor, boolean deleteCode, boolean skipTabooLibRelocate, Map<String, String> relocations, String projectName, String projectVersion, String projectGroup, boolean api) {
         super(Opcodes.ASM9, classVisitor);
-        this.project = project
-        this.tabooExt = tabooExt
+        this.deleteCode = deleteCode
+        this.skipTabooLibRelocate = skipTabooLibRelocate
+        this.relocations = relocations
+        this.projectName = projectName
+        this.projectVersion = projectVersion
+        this.projectGroup = projectGroup
         this.api = api
     }
 
@@ -37,7 +49,7 @@ class TabooLibClassVisitor extends ClassVisitor {
 
     @Override
     MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-        if (project.hasProperty("DeleteCode")) return new EmptyMethodVisitor(super.visitMethod(access, name, descriptor, signature, exceptions))
+        if (deleteCode) return new EmptyMethodVisitor(super.visitMethod(access, name, descriptor, signature, exceptions))
         return super.visitMethod(access, name, descriptor, signature, exceptions)
     }
 
@@ -45,11 +57,11 @@ class TabooLibClassVisitor extends ClassVisitor {
     AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
         // 插件注解
         if (descriptor in pluginAnnotations) {
-            return new PluginAnnotationVisitor(super.visitAnnotation(descriptor, visible), project)
+            return new PluginAnnotationVisitor(super.visitAnnotation(descriptor, visible), projectName, projectVersion)
         }
         // Metadata
-        if (!tabooExt.version.skipTabooLibRelocate && descriptor == "Lkotlin/Metadata;") {
-            return new KotlinMetaAnnotationVisitor(super.visitAnnotation(descriptor, visible), project, tabooExt)
+        if (!skipTabooLibRelocate && descriptor == "Lkotlin/Metadata;") {
+            return new KotlinMetaAnnotationVisitor(super.visitAnnotation(descriptor, visible), projectGroup, relocations)
         }
         // 其他
         return super.visitAnnotation(descriptor, visible)

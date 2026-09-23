@@ -1,26 +1,27 @@
 package io.izzel.taboolib.gradle
 
-import org.gradle.api.Project
 import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.Opcodes
 
 class KotlinMetaAnnotationVisitor extends AnnotationVisitor {
 
-    Project project
-    TabooLibExtension tabooExt
+    // 配置缓存兼容：不再持有 Project / TabooLibExtension，仅保留所需的标量值
+    String projectGroup
 
-    KotlinMetaAnnotationVisitor(AnnotationVisitor annotationVisitor, project, tabooExt) {
+    Map<String, String> relocations
+
+    KotlinMetaAnnotationVisitor(AnnotationVisitor annotationVisitor, String projectGroup, Map<String, String> relocations) {
         super(Opcodes.ASM9, annotationVisitor)
-        this.project = project
-        this.tabooExt = tabooExt
+        this.projectGroup = projectGroup
+        this.relocations = relocations
     }
 
     @Override
     void visit(String name, Object value) {
         if (value instanceof String) {
-            def group = project.group.toString().replace('.', '/')
+            def group = projectGroup.replace('.', '/')
             def rep = value.replace("Ltaboolib", "L$group/taboolib")
-            tabooExt.relocation.each { k, v ->
+            relocations.each { k, v ->
                 rep = rep.replace("L${k.replace('.', '/')}", "L${v.replace('.', '/')}")
             }
             super.visit(name, rep)
@@ -31,6 +32,6 @@ class KotlinMetaAnnotationVisitor extends AnnotationVisitor {
 
     @Override
     AnnotationVisitor visitArray(String name) {
-        return new KotlinMetaAnnotationVisitor(super.visitArray(name), project, tabooExt)
+        return new KotlinMetaAnnotationVisitor(super.visitArray(name), projectGroup, relocations)
     }
 }

@@ -1,6 +1,6 @@
 package io.izzel.taboolib.gradle.description
 
-class Dependencies {
+class Dependencies implements Serializable {
 
     List<Dependency> dependencies = []
 
@@ -10,7 +10,7 @@ class Dependencies {
         return dep
     }
 
-    class Dependency {
+    class Dependency implements Serializable {
 
         // 适应 CloudNet 依赖
         String group

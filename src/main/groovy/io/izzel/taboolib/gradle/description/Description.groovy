@@ -2,7 +2,7 @@ package io.izzel.taboolib.gradle.description
 
 import org.gradle.api.Action
 
-class Description {
+class Description implements Serializable {
 
     Contributors con = new Contributors()
 

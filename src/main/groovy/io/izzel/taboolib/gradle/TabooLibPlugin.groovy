@@ -81,13 +81,23 @@ class TabooLibPlugin implements Plugin<Project> {
             def jarTaskProvider = project.tasks.named('jar', Jar)
             jarTaskProvider.configure { Jar task ->
                 task.finalizedBy(tabooTask)
-                task.from(taboo.collect { // 在这里打包 "taboo" 依赖
-                    if (it.isDirectory()) {
-                        it
-                    } else if (it.name.endsWith(".jar")) {
-                        project.zipTree(it)
-                    } else {
-                        project.files(it)
+                // 用 Provider 包装 taboo configuration 的解析，推迟到 task 执行阶段。
+                // 之前是 task.from(taboo.collect { ... })——Groovy collect 会立即调用
+                // Configuration.iterator() 触发 cross-project resolve，强制提前 evaluate
+                // 所有 taboo(project(":...")) 引用的上游子项目。Gradle 9 严格的
+                // DefaultMutationGuard 会因此拒绝部分子项目（如 PublishingPlugin
+                // 想注册 afterEvaluate 监听器，但目标 project 已配置完成）。
+                // 改用 project.provider { ... } 后求值推迟到 task 执行阶段，避免在
+                // 配置阶段触发任何 cross-project resolve。
+                task.from(project.provider {
+                    taboo.collect { // 在这里打包 "taboo" 依赖
+                        if (it.isDirectory()) {
+                            it
+                        } else if (it.name.endsWith(".jar")) {
+                            project.zipTree(it)
+                        } else {
+                            project.files(it)
+                        }
                     }
                 })
                 task.duplicatesStrategy = DuplicatesStrategy.EXCLUDE
@@ -98,12 +108,39 @@ class TabooLibPlugin implements Plugin<Project> {
 
             def kotlinVersion = KotlinPluginWrapperKt.getKotlinPluginVersion(project).replaceAll("[._-]", "")
             tabooTask.configure { TabooLibMainTask task ->
-                task.tabooExt = tabooExt
-                task.project = project
                 task.inJar = task.inJar ?: jarTaskProvider.get().archiveFile.get().asFile
                 task.relocations = tabooExt.relocation
                 task.classifier = tabooExt.classifier
                 task.api = api
+
+                // 配置缓存兼容：在配置期提取所有需要的值为任务属性
+                task.subproject = tabooExt.subproject
+                task.exclude = tabooExt.exclude
+                task.skipVersionFile = tabooExt.version.skipVersionFile
+                task.skipPlatformFile = tabooExt.version.skipPlatformFile
+                task.modules = tabooExt.env.modules
+                task.pluginDescription = tabooExt.des
+                task.envDebug = tabooExt.env.debug
+                task.forceDownloadInDev = tabooExt.env.forceDownloadInDev
+                task.envRepoCentral = tabooExt.env.repoCentral
+                task.envRepoTabooLib = tabooExt.env.repoTabooLib
+                task.envFileLibs = tabooExt.env.fileLibs
+                task.envFileAssets = tabooExt.env.fileAssets
+                task.enableLegacyDependencyResolver = tabooExt.env.enableLegacyDependencyResolver
+                task.enableIsolatedClassloader = tabooExt.env.enableIsolatedClassloader
+                task.disableOnSkippedVersion = tabooExt.env.disableOnSkippedVersion
+                task.disableOnUnsupportedVersion = tabooExt.env.disableOnUnsupportedVersion
+                task.disableWhenPrimitiveLoaderError = tabooExt.env.disableWhenPrimitiveLoaderError
+                task.skipKotlin = tabooExt.version.skipKotlin
+                task.coroutinesVersion = tabooExt.version.coroutines
+                task.taboolibVersion = tabooExt.version.taboolib
+                task.skipKotlinRelocate = tabooExt.version.skipKotlinRelocate
+                task.skipTabooLibRelocate = tabooExt.version.skipTabooLibRelocate
+                task.kotlinVersion = KotlinPluginWrapperKt.getKotlinPluginVersion(project)
+                task.deleteCode = project.hasProperty("DeleteCode")
+                task.projectName = project.name
+                task.projectGroup = project.group.toString()
+                task.projectVersion = project.version.toString()
 
                 // 重定向
                 if (!tabooExt.version.isSkipTabooLibRelocate()) {

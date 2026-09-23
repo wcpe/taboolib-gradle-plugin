@@ -1,7 +1,11 @@
-import org.gradle.api.tasks.compile.GroovyCompile
-import org.gradle.api.tasks.compile.JavaCompile
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
+// 7 位短哈希：与 taboolib/reflex fork 命名一致，发布版本号为 <上游版本>-<短哈希>
+val gitShortHash: String = runCatching {
+    ProcessBuilder("git", "rev-parse", "--short=7", "HEAD")
+        .directory(rootDir).start()
+        .inputStream.bufferedReader().use { it.readText() }.trim()
+}.getOrNull()?.takeIf { it.isNotEmpty() } ?: "unknown"
 
 plugins {
     id("groovy")
@@ -57,7 +61,29 @@ gradlePlugin {
 
 publishing {
     repositories {
-        maven("/Users/sky/Desktop/repo")
+        maven {
+            credentials {
+                // 属性名对齐 taboolib fork：wcpeUsername / wcpePassword（发布到 io/izzel/taboolib/ 路径）
+                username = project.findProperty("wcpeUsername").toString()
+                password = project.findProperty("wcpePassword").toString()
+            }
+            authentication {
+                create<BasicAuthentication>("basic")
+            }
+            val releasesRepoUrl = uri("https://repo.wcpe.top/repository/maven-releases/")
+            val snapshotsRepoUrl = uri("https://repo.wcpe.top/repository/maven-snapshots/")
+            url = if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
+        }
+        mavenLocal()
+    }
+    publications {
+        create<MavenPublication>("gradle-plugins") {
+            groupId = "io.izzel.taboolib"
+            artifactId = "io.izzel.taboolib.gradle.plugin"
+            // 版本号已在顶部拼接为 <上游版本>-<短哈希>，此处直接继承 project.version
+            from(components["java"])
+            println("> Apply \"$groupId:$artifactId:$version\"")
+        }
     }
 }
 

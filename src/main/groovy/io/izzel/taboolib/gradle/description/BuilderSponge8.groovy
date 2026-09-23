@@ -2,25 +2,23 @@ package io.izzel.taboolib.gradle.description
 
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
-import io.izzel.taboolib.gradle.TabooLibExtension
-import org.gradle.api.Project
 
 class BuilderSponge8 extends Builder {
 
     @Override
-    byte[] build(Description description, Project project, TabooLibExtension tabooLibExt) {
+    byte[] build(Description description, String projectName, String projectGroup, String projectVersion, boolean skipTabooLibRelocate) {
         def json = new JsonObject()
         def plugins = new JsonArray()
         def info = new JsonObject()
         info.addProperty('loader', 'java_plain')
-        info.addProperty('id', (description.name ?: project.name).toLowerCase())
-        info.addProperty('name', description.name ?: project.name)
-        info.addProperty('version', project.version.toString())
+        info.addProperty('id', (description.name ?: projectName).toLowerCase())
+        info.addProperty('name', description.name ?: projectName)
+        info.addProperty('version', projectVersion)
 
-        if (tabooLibExt.version.skipTabooLibRelocate) {
+        if (skipTabooLibRelocate) {
             info.addProperty('main-class', "taboolib.platform.Sponge8Plugin")
         } else {
-            info.addProperty('main-class', "${project.group}.taboolib.platform.Sponge8Plugin")
+            info.addProperty('main-class', "${projectGroup}.taboolib.platform.Sponge8Plugin")
         }
 
         write(info, description.spongeDesc, 'description')
