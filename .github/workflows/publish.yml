@@ -1,21 +1,15 @@
-name: 发布到 maven.wcpe.top
+name: 发布到 WCPE Maven 仓库
 
-# 触发：推送到 main 分支自动正式发布（含 GitHub Release）；推送到 dev 分支仅测试 publish 是否成功
-# 仅含文档变更的提交不触发发布（避免无代码变更时浪费发布配额与产生无意义 Release）
-# 也支持在 Actions 页手动触发
+# 触发：推送「版本号 tag」时发布。tag 必须与 gradle.properties 的 version 完全一致
+# （例如 gradle.properties 中 version=2.0.38-wcpe.1 时，打同名 tag 2.0.38-wcpe.1 并推送），
+# 校验不通过会直接失败，避免误发版；普通提交推送到 main 只构建验证，不再自动发布。
 on:
   push:
-    branches:
-      - main
-      - dev
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
+    tags:
+      - '*'
   workflow_dispatch: {}
 
-# 同一分支的发布串行排队，避免并发互相覆盖
+# 同一 tag 的发布串行排队，避免并发互相覆盖
 concurrency:
   group: publish-${{ github.ref }}
   cancel-in-progress: false
@@ -29,8 +23,21 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
         with:
-          # 仅需 HEAD 即可生成 2.0.37-<短哈希> 版本号
+          # 仅需 HEAD 即可读取 gradle.properties 的版本号
           fetch-depth: 1
+
+      - name: 校验版本号与 tag 一致
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          tag="${REF#refs/tags/}"
+          base="$(grep -E '^version=' gradle.properties | head -1 | cut -d= -f2 | tr -d '[:space:]')"
+          if [ "${tag}" != "${base}" ]; then
+            echo "::error::发布失败：tag 为 ${tag}，gradle.properties 版本为 ${base}，两者不一致。请先更新 gradle.properties 再打同名 tag。"
+            exit 1
+          fi
+          echo "版本校验通过：${tag}"
 
       - name: 配置 JDK 17
         uses: actions/setup-java@v4
@@ -43,7 +50,7 @@ jobs:
       - name: 授予 gradlew 执行权限
         run: chmod +x ./gradlew
 
-      - name: 发布到 maven.wcpe.top
+      - name: 发布到 WCPE Maven 仓库
         env:
           # Gradle 会把 ORG_GRADLE_PROJECT_xxx 环境变量映射为工程属性 xxx，
           # 对应 build.gradle.kts 里的 findProperty("wcpeUsername" / "wcpePassword")
@@ -52,12 +59,10 @@ jobs:
         run: ./gradlew publish --no-daemon --console=plain --stacktrace
 
   # Maven 发布成功后，再发布 GitHub Release：
-  # 以「每个提交一版」的 2.0.37-<短哈希> 为 tag，标记为仓库最新发布，
+  # 以「上游版本 + wcpe 修订号」的 tag（与 gradle.properties 一致）标记为仓库最新发布，
   # 正文按提交类型（Conventional Commits）归纳上一发布至当前的中文变更日志。
-  # 仅 main 分支触发，dev 分支只验证 publish 不创建 Release
   release:
     needs: publish
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       # 仅本 job 需要写权限以创建 Release 与版本 tag，其余 job 保持只读，遵循最小权限
@@ -77,10 +82,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # 版本号与 gradle.properties 保持一致：<version>-<7 位短哈希>
-          base="$(grep -E '^version=' gradle.properties | head -1 | cut -d= -f2 | tr -d '[:space:]')"
-          short="$(git rev-parse --short=7 HEAD)"
-          tag="${base}-${short}"
+          # 版本号直接使用 gradle.properties 的 version（Debian 式：上游版本 + wcpe 修订号，如 2.0.38-wcpe.1）
+          tag="$(grep -E '^version=' gradle.properties | head -1 | cut -d= -f2 | tr -d '[:space:]')"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
           # 上一发布：取仓库当前「最新 Release」的 tag 作为变更日志起点；首次发布则无
