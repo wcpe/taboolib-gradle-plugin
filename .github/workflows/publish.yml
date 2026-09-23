@@ -138,7 +138,10 @@ jobs:
             # 转义 @ 为 \@，防止 commit 标题里的 @username 在 Release notes 中触发 mention
             s="${s//@/\\@}"
             bucket[${t}]+="- ${s} (\`${h}\`)"$'\n'
-          done < <(git log --no-merges --pretty=format:'%h%x09%s' "${log_args[@]}")
+          # 用 tformat 而非 format：tformat 为每条提交（含最后一条）补终止换行，
+          # 而 format 的末行无换行，while read 会在无换行的 EOF 处返回非零并跳过
+          # 循环体，导致范围内时间最早的提交被静默丢弃。
+          done < <(git log --no-merges --pretty=tformat:'%h%x09%s' "${log_args[@]}")
 
           for t in "${order[@]}"; do
             if [ -n "${bucket[${t}]:-}" ]; then
