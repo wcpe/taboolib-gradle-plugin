@@ -1,12 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-// 7 位短哈希：与 taboolib/reflex fork 命名一致，发布版本号为 <上游版本>-<短哈希>
-val gitShortHash: String = runCatching {
-    ProcessBuilder("git", "rev-parse", "--short=7", "HEAD")
-        .directory(rootDir).start()
-        .inputStream.bufferedReader().use { it.readText() }.trim()
-}.getOrNull()?.takeIf { it.isNotEmpty() } ?: "unknown"
-
 plugins {
     id("groovy")
     `maven-publish`
@@ -16,13 +9,17 @@ plugins {
 }
 
 group = "io.izzel.taboolib"
-version = "2.0.39"
+// 发布版本号直接读取 gradle.properties 的 version（Debian 式：上游版本 + wcpe 修订号，如 2.0.38-wcpe.1），
+// 与 tag 驱动的发布流程保持一致：打与 version 同名的 tag 即触发发布
 
 configurations {
     create("embed") {
         implementation.get().extendsFrom(this)
     }
 }
+
+val kotlinPluginTestRuntime by configurations.creating
+val functionalTestSourceSet = sourceSets.create("functionalTest")
 
 repositories {
     mavenLocal()
@@ -37,6 +34,28 @@ dependencies {
     "embed"("org.ow2.asm:asm-commons:9.9")
     "embed"("com.google.code.gson:gson:2.9.0")
     "embed"(kotlin("stdlib"))
+    add(functionalTestSourceSet.implementationConfigurationName, gradleTestKit())
+    kotlinPluginTestRuntime("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24")
+}
+
+tasks.pluginUnderTestMetadata {
+    pluginClasspath.from(kotlinPluginTestRuntime)
+}
+
+// 使用 Gradle 自带 TestKit 执行真实消费工程，避免为了构建回归额外引入测试框架。
+val functionalTest by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "验证 TabooLib 下游配置缓存、任务缓存和产物稳定性"
+    dependsOn(functionalTestSourceSet.classesTaskName, tasks.pluginUnderTestMetadata)
+    classpath = functionalTestSourceSet.runtimeClasspath
+    mainClass.set("io.izzel.taboolib.gradle.TabooLibCacheFunctionalTest")
+    args(layout.projectDirectory.dir(".tmp/cache-functional-test").asFile.absolutePath)
+    maxHeapSize = "512m"
+    jvmArgs("-Dfile.encoding=UTF-8")
+}
+
+tasks.check {
+    dependsOn(functionalTest)
 }
 
 tasks.jar {
@@ -45,6 +64,7 @@ tasks.jar {
 }
 
 gradlePlugin {
+    testSourceSets(functionalTestSourceSet)
     website.set("https://github.com/TabooLib/taboolib-gradle-plugin")
     vcsUrl.set("https://github.com/TabooLib/taboolib-gradle-plugin")
 

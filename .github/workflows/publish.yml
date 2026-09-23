@@ -2,7 +2,7 @@ name: 发布到 WCPE Maven 仓库
 
 # 触发：推送「版本号 tag」时发布。tag 必须与 gradle.properties 的 version 完全一致
 # （例如 gradle.properties 中 version=2.0.38-wcpe.1 时，打同名 tag 2.0.38-wcpe.1 并推送），
-# 校验不通过会直接失败，避免误发版；普通提交推送到 main 只构建验证，不再自动发布。
+# 校验不通过会直接失败，避免误发版；main 的验证由 ci.yml 执行，不自动发布。
 on:
   push:
     tags:
@@ -15,7 +15,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    name: 发布前验证
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   publish:
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -65,7 +72,7 @@ jobs:
     needs: publish
     runs-on: ubuntu-latest
     permissions:
-      # 仅本 job 需要写权限以创建 Release 与版本 tag，其余 job 保持只读，遵循最小权限
+      # 仅本 job 需要写权限以创建 Release，其余 job 保持只读；版本 tag 必须已存在。
       contents: write
     steps:
       - name: 检出代码
@@ -87,7 +94,7 @@ jobs:
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
           # 上一发布：取仓库当前「最新 Release」的 tag 作为变更日志起点；首次发布则无
-          prev_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name' 2>/dev/null || true)"
+          prev_tag="$(gh release view --repo "${GITHUB_REPOSITORY}" --json tagName --jq '.tagName' 2>/dev/null || true)"
           if [ -n "${prev_tag}" ] && git rev-parse -q --verify "refs/tags/${prev_tag}^{commit}" >/dev/null; then
             log_args=("${prev_tag}..HEAD")
             first_release=false
@@ -156,13 +163,14 @@ jobs:
           set -euo pipefail
           tag="${{ steps.notes.outputs.tag }}"
           notes_file="${{ steps.notes.outputs.notes_file }}"
-          # 同一提交重跑时幂等：已存在则仅更新正文，否则在当前提交新建 tag 并发布
-          if gh release view "${tag}" >/dev/null 2>&1; then
-            gh release edit "${tag}" --notes-file "${notes_file}" --latest
+          # 同一提交重跑时幂等：已存在则仅更新正文，否则只为已验证的现有 tag 创建 Release。
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release edit "${tag}" --repo "${GITHUB_REPOSITORY}" --notes-file "${notes_file}" --latest
           else
             gh release create "${tag}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --verify-tag \
               --title "${tag}" \
               --notes-file "${notes_file}" \
-              --target "${GITHUB_SHA}" \
               --latest
           fi

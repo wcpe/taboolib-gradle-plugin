@@ -4,6 +4,7 @@ import io.izzel.taboolib.gradle.description.Platforms
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.DuplicatesStrategy
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapperKt
 
@@ -24,6 +25,10 @@ class TabooLibPlugin implements Plugin<Project> {
         // 注册任务
         def tabooTask = project.tasks.maybeCreate('taboolibMainTask', TabooLibMainTask)
         tabooTask.group = "taboolib"
+        // 排除选择器允许任务名缩写，等所有项目配置结束后按当前 Gradle 的匹配规则解析。
+        project.gradle.projectsEvaluated {
+            tabooTask.relocationConfiguration.excluded = TabooLibTaskExclusions.isExcluded(project, tabooTask.name)
+        }
         // 注册任务 - 刷新依赖
         project.tasks.maybeCreate('taboolibRefreshDependencies')
         project.tasks.taboolibRefreshDependencies.group = "taboolib"
@@ -157,6 +162,23 @@ class TabooLibPlugin implements Plugin<Project> {
                         task.relocations['kotlinx.coroutines.'] = 'kotlin' + kotlinVersion + 'x.coroutines' + coroutinesVersion + '.'
                     }
                 }
+            }
+
+            // 最终 JAR 只能由一个任务拥有。重定位放到 jar 自身末尾后，Gradle 保存的是
+            // 已重定位产物的快照；兼容任务继续保留入口和配置属性，但不再二次改写输出。
+            tabooTask.dependsOn(jarTaskProvider)
+            def relocationConfiguration = tabooTask.relocationConfiguration
+            jarTaskProvider.configure { Jar task ->
+                def archiveFile = task.archiveFile.get().asFile
+                task.inputs.property('taboolib', project.providers.provider(new TabooLibRelocationInputs(relocationConfiguration)))
+                task.inputs.files(project.providers.provider(new TabooLibRelocationFiles(relocationConfiguration, archiveFile, true)))
+                        .withPropertyName('taboolibExternalInput').withPathSensitivity(PathSensitivity.NAME_ONLY)
+                task.outputs.files(project.providers.provider(new TabooLibRelocationFiles(relocationConfiguration, archiveFile, false)))
+                        .withPropertyName('taboolibAdditionalOutput')
+                task.preserveFileTimestamps = false
+                task.reproducibleFileOrder = true
+                task.outputs.cacheIf('TabooLib 重定位与元数据已声明为 jar 输入') { true }
+                task.doLast(new TabooLibRelocateAction(relocationConfiguration))
             }
         }
     }
