@@ -13,8 +13,12 @@ class TabooLibPlugin implements Plugin<Project> {
     @Override
     void apply(Project project) {
         // 添加仓库
+        //
+        // 用 Env 的默认值而不是硬编码字面量：这个仓库既用于解析 TabooLib 工件，
+        // 也会被写进产物 env.properties 的 repo-taboolib。两处必须同源，
+        // 否则改了一处、另一处还指着旧地址，产出的插件仍然自举不了依赖。
         project.repositories.maven {
-            url = project.uri("https://repo.tabooproject.org/repository/releases/")
+            url = project.uri(new Env().repoTabooLib)
         }
         project.repositories.maven {
             url = project.uri("https://repo.spongepowered.org/maven")

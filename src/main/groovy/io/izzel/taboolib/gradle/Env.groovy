@@ -12,8 +12,16 @@ class Env {
     /** 中央仓库地址 */
     String repoCentral = "https://maven.aliyun.com/repository/central"
 
-    /** TabooLib 仓库地址 */
-    String repoTabooLib = "https://repo.tabooproject.org/repository/releases"
+    /**
+     * TabooLib 仓库地址。
+     *
+     * WCPE 定制版（`X.Y.Z-wcpe.N`）只发布在 WCPE 私有仓库，上游 tabooproject 上是 404。
+     * 这个值会被写进产物 `META-INF/taboolib/env.properties` 的 `repo-taboolib`，
+     * 而该文件**优先于**运行期默认值（common-env 的 PrimitiveSettings 默认已是 wcpe 私有仓库），
+     * 所以构建期这里若还指向上游，产物就会带着一个取不到定制工件的地址出厂 ——
+     * 插件在任何机器上都无法自举下载依赖（Failed to download common-env-*.jar 后插件被禁用）。
+     */
+    String repoTabooLib = "https://repo.wcpe.top/repository/maven-public/"
 
     /** Library 文件 */
     String fileLibs = "libraries"
