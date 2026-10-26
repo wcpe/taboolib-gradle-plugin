@@ -10,7 +10,20 @@ import org.gradle.work.DisableCachingByDefault
 class TabooLibMainTask extends DefaultTask {
 
     @Internal
-    final TabooLibRelocation relocationConfiguration = new TabooLibRelocation()
+    TabooLibRelocation relocationConfiguration = new TabooLibRelocation()
+
+    /**
+     * 采用外部共享的配置对象。
+     *
+     * `jar` 在配置期就要把重定位配置挂成自己的输入 / 末尾动作，而那时 `taboolibMainTask`
+     * 可能还没被实例化（`subproject = true` 的模块根本不该实例化它）。因此配置对象由插件
+     * 提前建好，任务创建时接收同一个实例 —— 保证「任务属性」与「jar 实际使用的配置」
+     * 始终是同一份数据（`enabled = false`、`relocations` 等改动双向可见）。
+     */
+    void adoptRelocationConfiguration(TabooLibRelocation configuration) {
+        this.relocationConfiguration = configuration
+        this.relocationConfiguration.enabled = getEnabled()
+    }
 
     @Override
     void setEnabled(boolean enabled) {
