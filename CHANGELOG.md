@@ -1,6 +1,6 @@
 # 更新日志
 
-## 未发布
+## 2.0.39-wcpe.3 - 2026-11-02
 
 - 移除 `afterEvaluate` / `gradle.projectsEvaluated`，插件改为纯惰性求值，兼容 Gradle 按需配置（`org.gradle.configureondemand=true`）。
   此前在 CoD 下对已求值工程注册监听会抛 `cannot be executed in the current context`；`projectsEvaluated` 则属配置缓存禁止项。
@@ -16,10 +16,7 @@
   刷新任务改为独立任务类型（原先的 `doLast` 闭包会捕获脚本对象，配置缓存会判失败）。
 - 重定位配置对象改由插件提前创建、任务创建时 `adoptRelocationConfiguration` 接收同一实例，
   保证「任务属性」与「jar 实际使用的配置」仍是同一份数据（`-x` 排除、`enabled = false` 语义不变）。
-- `functionalTest` 新增四组回归：提前实例化 `jar` 仍生效、`subproject` 精简路径、按需配置无上下文异常、构建期仓库顺序（见下条 wcpe.3）。
-
-## 2.0.39-wcpe.3 - 2026-10-23
-
+- `functionalTest` 新增四组回归：提前实例化 `jar` 仍生效、`subproject` 精简路径、按需配置无上下文异常、构建期仓库顺序（见下条）。
 - 修复 `2.0.39-wcpe.2` 引入的构建期依赖解析失败：NMS 平台工件（`ink.ptms.core:v12004`、`v12110` 等）无法解析。
   上一版把构建期仓库整个替换成 wcpe，而上游 `repo.tabooproject.org` 上的 NMS jar 在 wcpe 上缺失
   （`v12004-12004.pom` 返回 200，但 `-universal.jar` / `-mapped.jar` 均返回 404）。
