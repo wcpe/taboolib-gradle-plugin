@@ -1,5 +1,17 @@
 # 更新日志
 
+## 2.0.39-wcpe.4 - 2026-11-08
+
+- 兼容 Gradle **Isolated Projects**（`org.gradle.unsafe.isolated-projects=true`）。
+- 依赖注入的延迟 `Provider` 闭包不再捕获 `Project`：`DependencyHandler` 在配置期取出后由闭包捕获，
+  `coroutinesDependency` / `taboolibModuleDependencies` 改为接收该 Handler 而非 `Project`。
+  IP 下延迟闭包体内调用 `project.dependencies` 会被判定为跨项目访问，刷 configuration-cache problem。
+  注入的依赖内容与时序均不变（TabooLib 模块、协程依赖仍在用户脚本 `taboolib { }` 之后求值）。
+- `-x` 任务排除判定改为纯字符串比较：`TabooLibTaskExclusions` 不再遍历 `rootProject.allprojects` /
+  `childProjects` / `tasks.names`，只用项目路径字符串与本项目自身的 `tasks.names`。
+  全限定选择器（`:task` / `:a:b:task` / `a:b:task`）按所属项目路径比较，无冒号选择器只在本项目匹配，
+  语义与 Gradle 自身的 `-x`（不递归到子项目）一致；任务名前缀缩写（如 `-x taboolibM`）仍然可用。
+
 ## 2.0.39-wcpe.3 - 2026-11-02
 
 - 移除 `afterEvaluate` / `gradle.projectsEvaluated`，插件改为纯惰性求值，兼容 Gradle 按需配置（`org.gradle.configureondemand=true`）。
