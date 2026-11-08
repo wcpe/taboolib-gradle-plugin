@@ -125,8 +125,20 @@ class TabooLibPlugin implements Plugin<Project> {
         // `taboo` 用 `withDependencies` 而不是 `addAllLater`：前者在解析前把内置模块
         // **追加到用户依赖之后**，与 `afterEvaluate` 时代的位置一致；后者会把惰性依赖
         // 排到用户依赖之前，虽然内容相同但会改变 `jar` 的条目顺序（产物字节随之变化）。
+        //
+        // ## Isolated Projects 兼容（2026-11 改造）
+        //
+        // 关键：下面所有 `project.provider { … }` 的闭包**都不再引用 `project`**。
+        // IP 下 Gradle 会检查延迟闭包体内的跨项目访问；即使闭包属于本项目，
+        // 只要在延迟求值时还持有 Project 引用并调用其方法（`project.dependencies` 等），
+        // 就会被计为 configuration-cache problem。
+        //
+        // 做法：把需要的 `DependencyHandler` 在**配置期**取出来（此时访问本项目完全合法），
+        // 闭包只捕获这个 Handler 与纯数据（版本号、模块名列表），不捕获 Project。
+        def dependencyHandler = project.dependencies
+
         taboo.withDependencies(new TabooLibTabooDependenciesAction(project.provider {
-            taboolibModuleDependencies(project, tabooExt, api, true)
+            taboolibModuleDependencies(dependencyHandler, tabooExt, api, true)
         }))
 
         project.pluginManager.withPlugin('java') {
@@ -139,29 +151,33 @@ class TabooLibPlugin implements Plugin<Project> {
 
             // 自动引入协程：compileOnly 与 testImplementation 各一份
             project.configurations.compileOnly.dependencies.addAllLater(project.provider {
-                coroutinesDependency(project, tabooExt)
+                coroutinesDependency(dependencyHandler, tabooExt)
             })
             project.configurations.testImplementation.dependencies.addAllLater(project.provider {
-                coroutinesDependency(project, tabooExt)
+                coroutinesDependency(dependencyHandler, tabooExt)
             })
 
             // 自动引入仅编译期可见的 TabooLib 模块
             project.configurations.compileOnly.dependencies.addAllLater(project.provider {
-                taboolibModuleDependencies(project, tabooExt, api, false)
+                taboolibModuleDependencies(dependencyHandler, tabooExt, api, false)
             })
             project.configurations.testImplementation.dependencies.addAllLater(project.provider {
-                taboolibModuleDependencies(project, tabooExt, api, false)
+                taboolibModuleDependencies(dependencyHandler, tabooExt, api, false)
             })
         }
     }
 
-    /** 协程依赖：版本为 null（用户显式关闭）时返回空表，等价于「不注入」。 */
-    private static List coroutinesDependency(Project project, TabooLibExtension tabooExt) {
+    /** 协程依赖：版本为 null（用户显式关闭）时返回空表，等价于「不注入」。
+     *
+     * 第一个参数是 `DependencyHandler` 而不是 `Project`：本方法只会在延迟 provider 里被调用，
+     * 而 IP 下闭包持有 Project 引用会被判跨项目访问（详见 installDependencies 的注释）。
+     */
+    private static List coroutinesDependency(Object dependencyHandler, TabooLibExtension tabooExt) {
         String coroutines = tabooExt.version.coroutines
         if (coroutines == null) {
             return []
         }
-        return [project.dependencies.create('org.jetbrains.kotlinx:kotlinx-coroutines-core:' + coroutines)]
+        return [dependencyHandler.create('org.jetbrains.kotlinx:kotlinx-coroutines-core:' + coroutines)]
     }
 
     /**
@@ -171,7 +187,7 @@ class TabooLibPlugin implements Plugin<Project> {
      *
      * @param forTaboo `true` 取「内联进产物」的那一组，`false` 取「仅编译期」的那一组
      */
-    private static List taboolibModuleDependencies(Project project, TabooLibExtension tabooExt,
+    private static List taboolibModuleDependencies(Object dependencyHandler, TabooLibExtension tabooExt,
                                                    boolean api, boolean forTaboo) {
         String version = tabooExt.version.taboolib
         if (version == null) {
@@ -181,7 +197,7 @@ class TabooLibPlugin implements Plugin<Project> {
             boolean inline = api || (isCoreModule(module) && !tabooExt.subproject)
             return inline == forTaboo
         }.collect { String module ->
-            project.dependencies.create("io.izzel.taboolib:${module}:${version}")
+            dependencyHandler.create("io.izzel.taboolib:${module}:${version}")
         }
     }
 
