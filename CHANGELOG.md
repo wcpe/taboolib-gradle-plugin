@@ -1,5 +1,14 @@
 # 更新日志
 
+## 2.0.39-wcpe.5 - 2026-11-15
+
+- 修复子项目在严格 Isolated Projects / 配置缓存下查找 `DeleteCode` 时上溯父项目的问题：惰性读取当前项目 extra 与 Gradle 属性存在性，保留 `false` 值仍启用删码、jar 提前实例化后本项目晚设置属性仍生效的行为。
+- 明确隔离边界：不再隐式继承父项目 extra；父级独有声明应迁移为 Gradle 属性或消费项目自身声明。
+- 新增六组 Gradle 9.5.0 严格 CC/IP 子项目回归，核验真实 JAR 方法体、元数据、配置缓存复用和字节稳定性；Windows 编译明确使用 UTF-8。
+- 修复 jar 提前实例化后再修改归档名/目标目录时，默认重定位输入仍停留在旧路径的问题；默认输入和额外文件声明跟随最终 archiveFile Provider，显式外部 File inJar 仍保留。增加晚归档与外部输入的严格缓存恢复回归。
+- 显式 `inJar` 的 `explicitInJar` 纳入 `jar` 输入指纹，不再依赖「标志变化必然伴随输入文件变化」的隐式耦合。
+- 修复显式 `inJar` 指向无扩展名文件时 `getOutputJar()` 抛 `StringIndexOutOfBoundsException`、`inJar` 为空时抛 NPE 的问题；补充显式 `inJar` 且 `classifier` 为空的原位重写回归。
+
 ## 2.0.39-wcpe.4 - 2026-11-08
 
 - 兼容 Gradle **Isolated Projects**（`org.gradle.unsafe.isolated-projects=true`）。
