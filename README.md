@@ -40,11 +40,13 @@ plugins {
 
 ## 构建缓存与回归验证
 
-重定位和描述文件生成由 `jar` 任务在打包末尾完成。`jar.archiveFile` 仍指向 `build/libs` 中的最终产物，`taboolibMainTask` 保留为依赖 `jar` 的兼容入口，其原有配置属性仍然生效。指定 `classifier` 时额外产物也由 `jar` 跟踪；不应再通过其他任务覆写这些输出。
+重定位和描述文件生成由 `jar` 任务在打包末尾完成。`jar.archiveFile` 仍指向配置的最终产物（默认在 `build/libs`），`taboolibMainTask` 保留为依赖 `jar` 的兼容入口，其原有配置属性仍然生效。指定 `classifier` 时额外产物也由 `jar` 跟踪；不应再通过其他任务覆写这些输出。默认重定位输入随 `jar.archiveFile` 的最终归档名和目录变化；若通过 `taboolibMainTask.inJar` 显式指定外部 File，则保留该覆盖，设置回 null 可恢复默认输入。显式输入且 classifier 为空时仍原位重写输入；要保留原始输入应设置非空 classifier。
 
 显式设置 `taboolibMainTask.enabled = false` 或通过 `-x taboolibMainTask` 排除任务时，仍保留原始 JAR；开关也参与缓存键。排除选择器在配置期使用当前 Gradle 的 `NameMatcher` 匹配任务名与路径缩写，执行期不查询任务图。此 fork 定位为 Gradle 9 兼容修复，本轮回归覆盖 9.4 与下游使用的 9.5，不据此新增其他 Gradle 版本的支持承诺。
 
 所有影响产物的 TabooLib 配置（包括平台描述、重定位规则顺序和 `DeleteCode`）纳入 `jar` 输入，ZIP 条目顺序和时间戳固定。启用 `--build-cache` 后支持任务缓存；同一工程重复构建支持 `UP-TO-DATE`，`--configuration-cache-problems=fail` 用于严格验证配置缓存兼容性。
+
+`DeleteCode` 按**存在性**启用：`-PDeleteCode=false`、Gradle 属性文件的 `DeleteCode=false` 或当前项目 `extra` 的 `DeleteCode=false` 仍会擦除方法体，值不是布尔开关。本补丁起，无论是否开启 Isolated Projects，都只读取当前项目 extra 与 Gradle 属性，不再隐式继承父项目 extra；原来只在父项目 extra 上声明的消费者应改用 `-PDeleteCode`、Gradle 属性文件，或在应用插件的项目自身声明。当前项目晚于 jar 实例化设置的 extra 仍由惰性取值读取。
 
 运行真实消费工程回归：
 

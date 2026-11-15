@@ -37,7 +37,10 @@ class TabooLibMainTask extends DefaultTask {
     @Internal
     File getInJar() { relocationConfiguration.inJar }
 
-    void setInJar(File value) { relocationConfiguration.inJar = value }
+    void setInJar(File value) {
+        relocationConfiguration.inJar = value
+        relocationConfiguration.explicitInJar = value != null
+    }
 
     @Internal
     Map<String, String> getRelocations() { relocationConfiguration.relocations }

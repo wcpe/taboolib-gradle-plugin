@@ -49,7 +49,8 @@ val functionalTest by tasks.registering(JavaExec::class) {
     dependsOn(functionalTestSourceSet.classesTaskName, tasks.pluginUnderTestMetadata)
     classpath = functionalTestSourceSet.runtimeClasspath
     mainClass.set("io.izzel.taboolib.gradle.TabooLibCacheFunctionalTest")
-    args(layout.projectDirectory.dir(".tmp/cache-functional-test").asFile.absolutePath)
+    args(providers.systemProperty("taboolib.functionalTest.directory")
+        .getOrElse(layout.projectDirectory.dir(".tmp/cache-functional-test").asFile.absolutePath))
     maxHeapSize = "512m"
     jvmArgs("-Dfile.encoding=UTF-8")
 }
@@ -101,6 +102,10 @@ publishing {
     // （artifactId = io.izzel.taboolib.gradle.plugin）。手动创建会与 pluginMaven 坐标重叠，
     // 导致两者发布到同一路径时 release 仓库拒绝覆盖。
 }
+
+// 产物和功能夹具均为 UTF-8；不能依赖 Windows 默认 GBK（否则中文源码先于回归编译失败）。
+tasks.withType<JavaCompile>().configureEach { options.encoding = "UTF-8" }
+tasks.withType<GroovyCompile>().configureEach { groovyOptions.encoding = "UTF-8" }
 
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8

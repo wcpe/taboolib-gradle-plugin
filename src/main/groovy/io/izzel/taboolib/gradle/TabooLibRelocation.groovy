@@ -28,6 +28,9 @@ class TabooLibRelocation implements Serializable {
 
     File inJar
 
+    /** 默认输入随归档 Provider 刷新；仅兼容任务 setter 标记为显式覆盖。 */
+    boolean explicitInJar
+
     Map<String, String> relocations
 
     String classifier
@@ -93,6 +96,8 @@ class TabooLibRelocation implements Serializable {
         return [
                 enabled: enabled,
                 excluded: excluded,
+                // 是否显式覆盖输入决定 inJar 是否跟随归档，必须进入指纹，不能只依赖文件变化推断
+                explicitInJar: explicitInJar,
                 relocations: relocations.collect { key, value -> [key, value] },
                 classifier: classifier,
                 api: api,
@@ -129,9 +134,16 @@ class TabooLibRelocation implements Serializable {
     }
 
     File getOutputJar() {
-        int index = inJar.name.lastIndexOf('.')
-        String name = inJar.name.substring(0, index) + (classifier == null ? "" : "-" + classifier) + inJar.name.substring(index)
-        return new File(inJar.parentFile, name)
+        File input = inJar
+        if (input == null) {
+            throw new IllegalStateException("[TabooLib] 重定位输入 inJar 尚未确定，无法计算产物路径")
+        }
+        String fileName = input.name
+        String suffix = classifier == null ? "" : "-" + classifier
+        int index = fileName.lastIndexOf('.')
+        // 显式 inJar 允许任意外部文件；无扩展名时直接追加后缀，避免 substring(0, -1) 抛异常
+        String name = index < 0 ? fileName + suffix : fileName.substring(0, index) + suffix + fileName.substring(index)
+        return new File(input.parentFile, name)
     }
 
     private Map<String, byte[]> buildPlatformFiles() {

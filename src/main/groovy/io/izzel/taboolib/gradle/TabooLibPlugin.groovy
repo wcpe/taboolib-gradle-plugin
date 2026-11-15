@@ -266,7 +266,9 @@ class TabooLibPlugin implements Plugin<Project> {
                 // 与任务名集合，属于配置期常量，结果作为可缓存的布尔输入进入重定位配置。
                 relocationConfiguration.excluded = TabooLibTaskExclusions.isExcluded(project, MAIN_TASK_NAME)
 
-                File archiveFile = task.archiveFile.get().asFile
+                // 自身归档是路径值，不是额外 producer 依赖；map 会禁止 jar 完成前读值。
+                def archiveLocation = task.archiveFile
+                Provider<File> archiveFile = project.providers.provider { archiveLocation.get().asFile }
                 task.inputs.property('taboolib', project.providers.provider(new TabooLibRelocationInputs(relocationConfiguration, source)))
                 task.inputs.files(project.providers.provider(new TabooLibRelocationFiles(relocationConfiguration, source, archiveFile, true)))
                         .withPropertyName('taboolibExternalInput').withPathSensitivity(PathSensitivity.NAME_ONLY)
@@ -299,6 +301,12 @@ class TabooLibPlugin implements Plugin<Project> {
                                                              Jar jarTask, boolean api) {
         def versions = tabooExt.version
         def environment = tabooExt.env
+        def archiveLocation = jarTask.archiveFile
+        // 保持存在性语义（false/null extra 也算存在），但不再沿 Project 动态属性链上溯。
+        // extra 仍惰性读取，避免提前实例化 jar 时漏掉随后配置的本项目属性。
+        def localExtra = project.extensions.extraProperties
+        def gradleDeleteCode = project.providers.gradleProperty('DeleteCode')
+        def deleteCode = project.providers.provider { localExtra.has('DeleteCode') || gradleDeleteCode.isPresent() }
 
         return new TabooLibRelocationSource(
                 api,
@@ -311,8 +319,7 @@ class TabooLibPlugin implements Plugin<Project> {
                 project.provider { versions.skipKotlin },
                 project.provider { versions.skipKotlinRelocate },
                 project.provider { versions.skipTabooLibRelocate },
-                // `DeleteCode` 是命令行属性，配置期常量。
-                project.provider { project.hasProperty("DeleteCode") },
+                deleteCode,
                 project.provider { project.name },
                 project.provider { project.group.toString() },
                 project.provider { project.version.toString() },
@@ -333,7 +340,7 @@ class TabooLibPlugin implements Plugin<Project> {
                 project.provider { environment.repoTabooLib },
                 project.provider { environment.fileLibs },
                 project.provider { environment.fileAssets },
-                project.provider { jarTask.archiveFile.get().asFile })
+                project.providers.provider { archiveLocation.get().asFile })
     }
 
     /**

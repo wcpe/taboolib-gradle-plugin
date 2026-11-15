@@ -1,6 +1,7 @@
 package io.izzel.taboolib.gradle
 
 import java.util.concurrent.Callable
+import org.gradle.api.provider.Provider
 
 /**
  * 默认输入即 jar 自身输出；显式外部输入和分类产物另外交给 Gradle 跟踪。
@@ -14,12 +15,12 @@ class TabooLibRelocationFiles implements Callable<List<File>>, Serializable {
 
     private final TabooLibRelocationSource source
 
-    private final File archiveFile
+    private final Provider<File> archiveFile
 
     private final boolean inputs
 
     TabooLibRelocationFiles(TabooLibRelocation configuration, TabooLibRelocationSource source,
-                            File archiveFile, boolean inputs) {
+                            Provider<File> archiveFile, boolean inputs) {
         this.configuration = configuration
         this.source = source
         this.archiveFile = archiveFile
@@ -33,6 +34,6 @@ class TabooLibRelocationFiles implements Callable<List<File>>, Serializable {
             return []
         }
         File file = inputs ? configuration.inJar : configuration.outputJar
-        return file == archiveFile ? [] : [file]
+        return file == archiveFile.get() ? [] : [file]
     }
 }

@@ -133,7 +133,7 @@ class TabooLibRelocationSource implements Serializable {
      * 刻意不碰 `enabled` 与 `excluded`：前者由 `Task.setEnabled` 维护，
      * 后者由排除选择器在配置期一次算定，两者都不属于扩展内容。
      *
-     * `inJar` 只在目标尚未显式指定时填充，保留历史上「下游可提前覆盖」的语义。
+     * 默认 `inJar` 每次跟随最终 archiveFile；显式任务 setter 覆盖不被默认值刷新。
      */
     void applyTo(TabooLibRelocation target) {
         String version = taboolibVersion.getOrNull()
@@ -146,8 +146,8 @@ class TabooLibRelocationSource implements Serializable {
 
         target.classifier = classifier.getOrNull()
         target.api = api
-        // 保留下游提前显式指定的 inJar
-        target.inJar = target.inJar ?: inJar.get()
+        // 不能把首次填入的默认路径误认成显式值：下游可随后改归档名与输出目录。
+        if (!target.explicitInJar) target.inJar = inJar.get()
         target.subproject = subproject.get()
         target.skipVersionFile = skipVersionFile.get()
         target.skipPlatformFile = skipPlatformFile.get()
